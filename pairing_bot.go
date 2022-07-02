@@ -160,14 +160,32 @@ func (pl *PairingLogic) match(w http.ResponseWriter, r *http.Request) {
 
 	}
 
-	for i := 0; i < len(recursersList); i += 2 {
-
-		emails := recursersList[i].email + ", " + recursersList[i+1].email
-		err := pl.un.sendUserMessage(ctx, botPassword, emails, matchedMessage)
-		if err != nil {
-			log.Printf("Error when trying to send matchedMessage to %s: %s\n", emails, err)
+	// TODO: match by topic
+    visited := make([]bool, len(recursersList))
+	// FIXME: N^2 algorithm
+	for i := 0; i < len(recursersList); i += 1 {
+		// skip until nonpaired recurser
+        if visited[i] {
+            continue
+        }
+		for j := i + 1; j < len(recursersList); j += 1{
+			// skip until first nonpaired recurser with the same topic
+			if (visited[j] == true) || (recursersList[i].topic != recursersList[j].topic) {
+				continue
+			}
+			// mark paired recursers
+			visited[i] = true
+			visited[j] = true
+			// message
+			emails := recursersList[i].email + ", " + recursersList[i+1].email
+			err := pl.un.sendUserMessage(ctx, botPassword, emails, matchedMessage)
+			if err != nil {
+				log.Printf("Error when trying to send matchedMessage to %s: %s\n", emails, err)
+			}
+			log.Println(recursersList[i].email, "was", "matched", "with", recursersList[i+1].email)
+			// exit loop
+			break
 		}
-		log.Println(recursersList[i].email, "was", "matched", "with", recursersList[i+1].email)
 	}
 }
 

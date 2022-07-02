@@ -20,6 +20,7 @@ func parseCmd(cmdStr string) (string, []string, error) {
 		"unsubscribe",
 		"help",
 		"schedule",
+        "topic",
 		"skip",
 		"unskip",
 		"status"}
@@ -32,6 +33,12 @@ func parseCmd(cmdStr string) (string, []string, error) {
 		"friday",
 		"saturday",
 		"sunday"}
+
+    var topicsList = []string{
+    // TODO: how to maintain list of topics?
+    // IDEA: by stream name?
+    // IDEA: free for all?
+    }
 
 	// convert the string to a slice
 	// after this, we have a value "cmd" of type []string
@@ -51,7 +58,7 @@ func parseCmd(cmdStr string) (string, []string, error) {
 
 	// if there's a valid command and if there's no arguments
 	case contains(cmdList, cmd[0]) && len(cmd) == 1:
-		if cmd[0] == "schedule" || cmd[0] == "skip" || cmd[0] == "unskip" {
+		if cmd[0] == "schedule" || cmd[0] == "topic" || cmd[0] == "skip" || cmd[0] == "unskip" {
 			err = &parsingErr{"the user issued a command without args, but it reqired args"}
 			return "help", nil, err
 		}
@@ -73,6 +80,19 @@ func parseCmd(cmdStr string) (string, []string, error) {
 			for _, v := range cmd[1:] {
 				if !contains(daysList, v) {
 					err = &parsingErr{"the user issued SCHEDULE with malformed arguments"}
+					return "help", nil, err
+				}
+			}
+			fallthrough
+		case cmd[0] == "topic":
+			// only one topic supported
+			if len(cmd) != 2 {
+				err = &parsingErr{"the user issued TOPIC with malformed arguments"}
+				return "help", nil, err
+			}
+			for _, v := range cmd[1:] {
+				if !contains(topicsList, v) {
+					err = &parsingErr{"the user issued TOPIC with malformed arguments"}
 					return "help", nil, err
 				}
 			}

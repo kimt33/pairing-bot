@@ -58,6 +58,19 @@ func dispatch(ctx context.Context, pl *PairingLogic, cmd string, cmdArgs []strin
 		}
 		response = "Awesome, your new schedule's been set! You can check it with `status`."
 
+	case "topic":
+		if !isSubscribed {
+			response = notSubscribedMessage
+			break
+		}
+		rec.topic = cmdArgs[0]
+		// put it in the database
+		if err = pl.rdb.Set(ctx, userID, rec); err != nil {
+			response = writeErrorMessage
+			break
+		}
+		response = "Awesome, your topic's been set! You can check it with `status`."
+
 	case "subscribe":
 		if isSubscribed {
 			response = "You're already subscribed! Use `schedule` to set your schedule."
@@ -156,7 +169,16 @@ func dispatch(ctx context.Context, pl *PairingLogic, cmd string, cmdArgs []strin
 			scheduleStr += schedule[0] + "s"
 		}
 
-		response = fmt.Sprintf("* You're %v\n* You're scheduled for pairing on **%v**\n* **You're%vset to skip** pairing tomorrow", whoami, scheduleStr, skipStr)
+		// get the topic they'd like to talk
+		topic := rec.topic
+		var topicStr string
+		if topic == "any" {
+			topicStr = ""
+		} else {
+			topicStr = " on the topic of " + topic
+		}
+
+		response = fmt.Sprintf("* You're %v\n* You're scheduled for pairing on **%v**%v\n* **You're%vset to skip** pairing tomorrow", whoami, scheduleStr, topicStr, skipStr)
 
 	case "help":
 		response = helpMessage
