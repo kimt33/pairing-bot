@@ -4,9 +4,10 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"strconv"
 )
 
-const helpMessage string = "**How to use Pairing Bot:**\n* `subscribe` to start getting matched with other Pairing Bot users for pair programming\n* `schedule monday wednesday friday` to set your weekly pairing schedule\n  * In this example, I've been set to find pairing partners for you on every Monday, Wednesday, and Friday\n  * You can schedule pairing for any combination of days in the week\n* `skip tomorrow` to skip pairing tomorrow\n  * This is valid until matches go out at 04:00 UTC\n* `unskip tomorrow` to undo skipping tomorrow\n* `status` to show your current schedule, skip status, and name\n* `unsubscribe` to stop getting matched entirely\n\nIf you've found a bug, please [submit an issue on github](https://github.com/thwidge/pairing-bot/issues)!"
+const helpMessage string = "**How to use Pairing Bot:**\n* `subscribe` to start getting matched with other Pairing Bot users for pair programming\n* `schedule monday wednesday friday` to set your weekly pairing schedule\n  * In this example, I've been set to find pairing partners for you on every Monday, Wednesday, and Friday\n  * You can schedule pairing for any combination of days in the week\n* `streams` to select streams/topics of the match and to select the number of pairings per keyword\n  * For example, `streams any 2 pairing 1 math 1` would schedule per day 2 pairings with anyone, 1 pairing with someone interesting in pair programming, and 1 pairing with someone who'd like to talk about math. Of course, they would need to be available on a given day.\n  * At the moment, there's no strict rules for words as topics here except that they have to be one word. I suggest using the stream name without the spaces!\n* `skip tomorrow` to skip pairing tomorrow\n  * This is valid until matches go out at 04:00 UTC\n* `unskip tomorrow` to undo skipping tomorrow\n* `status` to show your current schedule, skip status, and name\n* `unsubscribe` to stop getting matched entirely\n\nIf you've found a bug, please [submit an issue on github](https://github.com/thwidge/pairing-bot/issues)!"
 const subscribeMessage string = "Yay! You're now subscribed to Pairing Bot!\nCurrently, I'm set to find pair programming partners for you on **Mondays**, **Tuesdays**, **Wednesdays**, **Thursdays**, and **Fridays**.\nYou can customize your schedule any time with `schedule` :)"
 const unsubscribeMessage string = "You're unsubscribed!\nI won't find pairing partners for you unless you `subscribe`.\n\nBe well :)"
 const notSubscribedMessage string = "You're not subscribed to Pairing Bot <3"
@@ -58,13 +59,22 @@ func dispatch(ctx context.Context, pl *PairingLogic, cmd string, cmdArgs []strin
 		}
 		response = "Awesome, your new schedule's been set! You can check it with `status`."
 
-	case "topic":
+	case "streams":
 		if !isSubscribed {
 			response = notSubscribedMessage
 			break
 		}
-		rec.topic = cmdArgs[0]
+		// convert arguments to map from stream to number of pairings per day in that stream
+		var newStreams = map[string]int{}
+		for i := 0; i < len(cmdArgs); i += 2{
+			// convert string to number
+			count, _ := strconv.Atoi(cmdArgs[i + 1])
+			// store
+			newStreams[cmdArgs[i]] = count
+		}
 		// put it in the database
+		rec.streams = newStreams
+
 		if err = pl.rdb.Set(ctx, userID, rec); err != nil {
 			response = writeErrorMessage
 			break
@@ -169,16 +179,34 @@ func dispatch(ctx context.Context, pl *PairingLogic, cmd string, cmdArgs []strin
 			scheduleStr += schedule[0] + "s"
 		}
 
-		// get the topic they'd like to talk
-		topic := rec.topic
-		var topicStr string
-		if topic == "any" {
-			topicStr = ""
-		} else {
-			topicStr = " on the topic of " + topic
+		// get the streams they'd like to talk in and format string to insert
+		// streams are stored as a []string first to make sure "any" comes first and for easy formatting
+		var streams []string
+		if rec.streams["any"] > 0 {
+			streams = append(streams, "any")
+		}
+		for stream, _ := range rec.streams {
+			if stream != "any" {
+				streams = append(streams, stream)
+			}
+		}
+		// make string print
+		var streamsStr string
+		for i, stream := range streams {
+			if stream == "any" {
+				streamsStr += fmt.Sprintf("%v pairings with any recurser", rec.streams[stream])
+			} else {
+				if streamsStr != "" {
+					streamsStr += ", "
+				}
+				if i == len(streams) - 1 {
+					streamsStr += "and "
+				}
+				streamsStr += fmt.Sprintf("%v pairings with a recurser from stream %v", rec.streams[stream], stream)
+			}
 		}
 
-		response = fmt.Sprintf("* You're %v\n* You're scheduled for pairing on **%v**%v\n* **You're%vset to skip** pairing tomorrow", whoami, scheduleStr, topicStr, skipStr)
+		response = fmt.Sprintf("* You're %v\n* You're scheduled for pairing on **%v**\n We'll try and find you %v \n **You're%vset to skip** pairing tomorrow", whoami, scheduleStr, streamsStr, skipStr)
 
 	case "help":
 		response = helpMessage

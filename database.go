@@ -26,8 +26,10 @@ import (
 // 		"saturday":  false,
 // 		"sunday":    false,
 // 	},
-//  "topic": "string",
-// }
+//  "streams": map[string]int{
+// 		"any":       0,
+// 	},
+
 
 type Recurser struct {
 	id                 string
@@ -35,18 +37,19 @@ type Recurser struct {
 	email              string
 	isSkippingTomorrow bool
 	schedule           map[string]interface{}
-    topic              string
+	streams            map[string]int
 	isSubscribed       bool
 }
 
 func (r *Recurser) ConvertToMap() map[string]interface{} {
+	// NOTE: not sure if it is possible for Recurser to not have attribute streams (I don't know how they are stored in db)
 	return map[string]interface{}{
 		"id":                 r.id,
 		"name":               r.name,
 		"email":              r.email,
 		"isSkippingTomorrow": r.isSkippingTomorrow,
 		"schedule":           r.schedule,
-		"topic":              r.topic,
+		"streams":            r.streams,
 	}
 }
 
@@ -57,7 +60,7 @@ func MapToStruct(m map[string]interface{}) Recurser {
 		email:              m["email"].(string),
 		isSkippingTomorrow: m["isSkippingTomorrow"].(bool),
 		schedule:           m["schedule"].(map[string]interface{}),
-		topic:              m["topic"].(string),
+		streams:            m["stream"].(map[string]int),
 	}
 }
 
@@ -116,7 +119,9 @@ func (f *FirestoreRecurserDB) GetByUserID(ctx context.Context, userID, userEmail
 				"saturday":  false,
 				"sunday":    false,
 			},
-            topic: "any",
+            streams: map[string]int{
+				"any": 1,
+			},
 		}
 	}
 	// now put the data from the recurser map into a Recurser struct

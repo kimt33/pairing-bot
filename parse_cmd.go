@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+	"strconv"
 )
 
 type parsingErr struct{ msg string }
@@ -20,7 +21,7 @@ func parseCmd(cmdStr string) (string, []string, error) {
 		"unsubscribe",
 		"help",
 		"schedule",
-        "topic",
+        "streams",
 		"skip",
 		"unskip",
 		"status"}
@@ -34,11 +35,9 @@ func parseCmd(cmdStr string) (string, []string, error) {
 		"saturday",
 		"sunday"}
 
-    var topicsList = []string{
-    // TODO: how to maintain list of topics?
-    // IDEA: by stream name?
-    // IDEA: free for all?
-    }
+    // TODO: how to maintain list of topics? by stream name? free for all text?
+    //var streamsList = []string{
+    //}
 
 	// convert the string to a slice
 	// after this, we have a value "cmd" of type []string
@@ -58,7 +57,7 @@ func parseCmd(cmdStr string) (string, []string, error) {
 
 	// if there's a valid command and if there's no arguments
 	case contains(cmdList, cmd[0]) && len(cmd) == 1:
-		if cmd[0] == "schedule" || cmd[0] == "topic" || cmd[0] == "skip" || cmd[0] == "unskip" {
+		if cmd[0] == "schedule" || cmd[0] == "streams" || cmd[0] == "skip" || cmd[0] == "unskip" {
 			err = &parsingErr{"the user issued a command without args, but it reqired args"}
 			return "help", nil, err
 		}
@@ -84,15 +83,23 @@ func parseCmd(cmdStr string) (string, []string, error) {
 				}
 			}
 			fallthrough
-		case cmd[0] == "topic":
-			// only one topic supported
-			if len(cmd) != 2 {
-				err = &parsingErr{"the user issued TOPIC with malformed arguments"}
+		case cmd[0] == "streams":
+			// check that number of arguments after "streams" is even
+			if len(cmd) == 1 || (len(cmd) - 1) % 2 == 1 {
+				err = &parsingErr{"the user issued STREAMS with malformed arguments"}
 				return "help", nil, err
 			}
-			for _, v := range cmd[1:] {
-				if !contains(topicsList, v) {
-					err = &parsingErr{"the user issued TOPIC with malformed arguments"}
+			// check that arguments alternate between valid stream and integer
+			for i := 1; i < len(cmd); i += 2{
+				// FIXME: not sure how to get list of streams from zulip
+				//if !contains(streamsList, cmd[i]) {
+				//	err = &parsingErr{"the user issued STREAMS with malformed arguments"}
+				//	return "help", nil, err
+				//}
+				// check that next element is integer and convert to appropriate type
+				// FIXME: is it possible to make a list of str and ints? list of (str, int)?
+				if _, err := strconv.Atoi(cmd[i + 1]); err != nil {
+					err = &parsingErr{"the user issued STREAMS with malformed arguments"}
 					return "help", nil, err
 				}
 			}

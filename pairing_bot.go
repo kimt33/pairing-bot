@@ -131,60 +131,82 @@ func (pl *PairingLogic) match(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// shuffle our recursers. This will not error if the list is empty
-	randSrc.Shuffle(len(recursersList), func(i, j int) { recursersList[i], recursersList[j] = recursersList[j], recursersList[i] })
-
-	// if for some reason there's no matches today, we're done
-	if len(recursersList) == 0 {
-		log.Println("No one was signed up to pair today -- so there were no matches")
-		return
-	}
-
 	// message the peeps!
 	botPassword, err := pl.adb.GetKey(ctx, "apiauth", "key")
 	if err != nil {
 		log.Println("Something weird happened trying to read the auth token from the database")
 	}
 
-	// if there's an odd number today, message the last person in the list
-	// and tell them they don't get a match today, then knock them off the list
-	if len(recursersList)%2 != 0 {
-		recurser := recursersList[len(recursersList)-1]
-		recursersList = recursersList[:len(recursersList)-1]
-		log.Println("Someone was the odd-one-out today")
-
-		err := pl.un.sendUserMessage(ctx, botPassword, recurser.email, oddOneOutMessage)
-		if err != nil {
-			log.Printf("Error when trying to send oddOneOut message to %s: %s\n", recurser.email, err)
+	// make map of stream to the recursers that selected this stream
+	recursersIndListPerStream := make(map[string][]int)
+	for i, recurser := range recursersList {
+		for stream, _ := range recurser.streams{
+			recursersIndListPerStream[stream] = append(recursersIndListPerStream[stream], i)
 		}
-
 	}
 
-	// TODO: match by topic
-    visited := make([]bool, len(recursersList))
-	// FIXME: N^2 algorithm
-	for i := 0; i < len(recursersList); i += 1 {
-		// skip until nonpaired recurser
-        if visited[i] {
-            continue
-        }
-		for j := i + 1; j < len(recursersList); j += 1{
-			// skip until first nonpaired recurser with the same topic
-			if (visited[j] == true) || (recursersList[i].topic != recursersList[j].topic) {
-				continue
+	// for each stream, shuffle recursers and pair
+	for stream, recursersInds := range recursersIndListPerStream {
+		// shuffle our recursers. This will not error if the list is empty
+		randSrc.Shuffle(len(recursersInds), func(i, j int) {recursersInds[i], recursersInds[j] = recursersInds[j], recursersInds[i]})
+
+		// if for some reason there's no matches today, we're done
+		if len(recursersInds) == 0 {
+			log.Println(fmt.Sprintf("No one was signed up to pair today in stream %v -- so there were no matches", stream))
+		}
+
+		// TODO: better to have "pair" of 3?
+		// if there's an odd number today, message the last person in the list
+		// and tell them they don't get a match today, then knock them off the list
+		if len(recursersInds)%2 != 0 {
+			recurser := recursersList[recursersInds[len(recursersInds)-1]]
+			recursersInds = recursersInds[:len(recursersInds)-1]
+			log.Println("Someone was the odd-one-out today")
+
+			err := pl.un.sendUserMessage(ctx, botPassword, recurser.email, oddOneOutMessage)
+			if err != nil {
+				log.Printf("Error when trying to send oddOneOut message to %s: %s\n", recurser.email, err)
 			}
-			// mark paired recursers
-			visited[i] = true
-			visited[j] = true
-			// message
-			emails := recursersList[i].email + ", " + recursersList[i+1].email
+		}
+
+		// pair adjacent recursers in recursersInds
+		for i := 0; i < len(recursersInds); i += 2 {
+			emails := recursersList[recursersInds[i]].email + ", " + recursersList[recursersInds[i+1]].email
 			err := pl.un.sendUserMessage(ctx, botPassword, emails, matchedMessage)
 			if err != nil {
 				log.Printf("Error when trying to send matchedMessage to %s: %s\n", emails, err)
 			}
-			log.Println(recursersList[i].email, "was", "matched", "with", recursersList[i+1].email)
-			// exit loop
-			break
+		}
+
+		// FIXME: N^2 algorithm
+		for i := 0; i < len(recursersInds); i += 1 {
+			recurserOne := recursersList[recursersInds[i]]
+			// skip until recurser is avaiable to match
+			if recurserOne.streams[stream] == 0 {
+				continue
+			}
+			for j := i + 1; j < len(recursersList); j += 1{
+				recurserTwo := recursersList[recursersInds[j]]
+				// skip until first available recurser that is availble to match
+				if (recurserTwo.streams[stream] == 0) {
+					continue
+				}
+				// count/decrement number of matches for each
+				// FIXME: check that changing the numbers here DOES NOT change database value
+				recurserOne.streams[stream] -= 1
+				recurserTwo.streams[stream] -= 1
+				// message
+				emails := recursersList[i].email + ", " + recursersList[i+1].email
+				err := pl.un.sendUserMessage(ctx, botPassword, emails, matchedMessage)
+				if err != nil {
+					log.Printf("Error when trying to send matchedMessage to %s: %s\n", emails, err)
+				}
+				log.Println(recursersList[i].email, "was", "matched", "with", recursersList[i+1].email)
+				// exit loop
+				if (recurserOne.streams[stream] == 0) {
+					break
+				}
+			}
 		}
 	}
 }
